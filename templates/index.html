@@ -1,1 +1,29 @@
-
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>مشروع فيليكس للأسهم</title>
+    <style>
+        :root {
+            /* هنا نطبق روح "تصميم فيليكس" */
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --success-green: #27ae60;
+            --bg-color: #f4f7f6;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg-color); color: var(--primary-color); text-align: center; padding: 50px; }
+        .card { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); display: inline-block; min-width: 300px; }
+        h1 { color: var(--accent-color); }
+        .price { font-size: 2.5em; font-weight: bold; margin: 20px 0; }
+        .status { font-size: 1.2em; color: var(--success-green); }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>سوق الأسهم السعودي</h1>
+        <p>رمز المؤشر: {{ data.name }}</p>
+        <div class="price">{{ data.price }}</div>
+        <div class="status">التغير: {{ data.change }}</div>
+    </div>
+</body>
+</html>
