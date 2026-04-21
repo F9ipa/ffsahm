@@ -1,27 +1,29 @@
-import streamlit as st
-import yfinance as ticker  # لسحب بيانات السوق السعودي
-import pandas as pd
+from flask import Flask, render_template, request
+import yfinance as yf
 
-st.set_page_config(page_title="TASI Dashboard", layout="wide")
+app = Flask(__name__)
 
-st.title("📊 لوحة متابعة السوق السعودي (TASI)")
-
-# إدخال رمز السهم (مثلاً 1120 للراجحي)
-stock_symbol = st.sidebar.text_input("أدخل رمز السهم (مثال: 1120)", "2222")
-full_symbol = f"{stock_symbol}.SR"
-
-# جلب البيانات
-data = ticker.download(full_symbol, period="1mo", interval="1d")
-
-if not data.empty:
-    st.subheader(f"أداء السهم {stock_symbol} خلال الشهر الماضي")
-    st.line_chart(data['Close'])
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    stock_data = None
+    symbol = "2222"  # الافتراضي سهم أرامكو
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("آخر سعر إغلاق", f"{data['Close'][-1]:.2f} ريال")
-    with col2:
-        change = data['Close'][-1] - data['Close'][0]
-        st.metric("التغير الشهري", f"{change:.2f} ريال", delta=f"{change:.2f}")
-else:
-    st.error("لم يتم العثور على بيانات، تأكد من رمز السهم.")
+    if request.method == 'POST':
+        symbol = request.form.get('symbol')
+    
+    # جلب البيانات من ياهو فاينانس
+    ticker = yf.Ticker(f"{symbol}.SR")
+    df = ticker.history(period="1d")
+    
+    if not df.empty:
+        stock_data = {
+            "symbol": symbol,
+            "price": round(df['Close'].iloc[-1], 2),
+            "high": round(df['High'].iloc[-1], 2),
+            "low": round(df['Low'].iloc[-1], 2)
+        }
+
+    return render_template('index.html', data=stock_data)
+
+if __name__ == '__main__':
+    app.run(debug=True)
