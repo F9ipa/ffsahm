@@ -3,4 +3,6 @@ yfinance
 pandas
 gunicorn
 streamlit
+plotly
+
 
