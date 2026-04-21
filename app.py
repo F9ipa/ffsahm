@@ -2,15 +2,14 @@ import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
 from flask import Flask, render_template, request
+import os
 
 app = Flask(__name__)
 
-# دالة حساب WaveTrend
-def get_wavetrend(df):
+def calculate_wavetrend(df):
     if len(df) < 40: return pd.Series(), pd.Series()
-    # معادلة hlc3
+    # معادلة LazyBear
     ap = (df['High'] + df['Low'] + df['Close']) / 3
-    # قناة الـ EMA
     esa = ta.ema(ap, length=10)
     d = ta.ema(abs(ap - esa), length=10)
     ci = (ap - esa) / (0.015 * d)
@@ -18,43 +17,48 @@ def get_wavetrend(df):
     wt2 = ta.sma(wt1, length=4)
     return wt1, wt2
 
-def check_signals(interval):
-    # قائمة تجريبية لبعض الشركات القيادية (يمكنك زيادتها)
-    # ملاحظة: فحص كل السوق (200+ سهم) على Render المجاني قد يستغرق وقتاً
-    tickers = ["2222.SR", "1120.SR", "1150.SR", "2010.SR", "7010.SR", "4030.SR", "1180.SR"] 
-    
+def get_signals(interval):
+    # قراءة الرموز من الملف
+    try:
+        with open('stocks.txt', 'r') as f:
+            tickers = [line.strip() for line in f if line.strip()]
+    except:
+        tickers = ["2222.SR"] # احتياطي
+
     pos_signals = []
     neg_signals = []
     
     for t in tickers:
         try:
-            data = yf.download(t, period="2y", interval=interval, progress=False)
-            wt1, wt2 = get_wavetrend(data)
+            # جلب البيانات (أقصى مدة ممكنة لكل فاصل)
+            period = "2y" if interval in ['1d', '1wk', '1mo'] else "1mo"
+            data = yf.download(t, period=period, interval=interval, progress=False)
             
-            if wt1.empty or wt2.empty: continue
+            if data.empty: continue
             
-            # فحص التقاطع في آخر شمعتين
-            current_wt1 = wt1.iloc[-1]
-            current_wt2 = wt2.iloc[-1]
-            prev_wt1 = wt1.iloc[-2]
-            prev_wt2 = wt2.iloc[-2]
+            wt1, wt2 = calculate_wavetrend(data)
             
-            # تقاطع إيجابي (wt1 يخترق wt2 للأعلى)
-            if prev_wt1 <= prev_wt2 and current_wt1 > current_wt2:
-                pos_signals.append(t.replace(".SR", ""))
-            # تقاطع سلبي (wt1 يكسر wt2 للأسفل)
-            elif prev_wt1 >= prev_wt2 and current_wt1 < current_wt2:
-                neg_signals.append(t.replace(".SR", ""))
-        except:
+            # فحص آخر شمعتين للتقاطع
+            w1_now, w2_now = wt1.iloc[-1], wt2.iloc[-1]
+            w1_prev, w2_prev = wt1.iloc[-2], wt2.iloc[-2]
+            
+            if w1_prev <= w2_prev and w1_now > w2_now:
+                pos_signals.append(t.split('.')[0])
+            elif w1_prev >= w2_prev and w1_now < w2_now:
+                neg_signals.append(t.split('.')[0])
+        except Exception as e:
+            print(f"Error scanning {t}: {e}")
             continue
+            
     return pos_signals, neg_signals
 
 @app.route('/')
 def index():
-    # الفاصل الافتراضي "يومي"
+    # الفواصل المتاحة: 1mo, 1wk, 1d, 90m (بديل لـ 4 ساعات لأن ياهو لا يدعمها مباشرة مجاناً)
     interval = request.args.get('interval', '1d')
-    pos, neg = check_signals(interval)
+    pos, neg = get_signals(interval)
     return render_template('index.html', pos=pos, neg=neg, interval=interval)
 
 if __name__ == "__main__":
-    app.run()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
