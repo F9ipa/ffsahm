@@ -1,35 +1,49 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
-    <title>تاسي - فلتر WaveTrend</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فلتر WaveTrend الشهري - تاسي</title>
     <style>
-        body { font-family: Arial; direction: rtl; text-align: center; background: #f4f4f4; }
-        table { margin: 20px auto; border-collapse: collapse; width: 80%; background: white; }
-        th, td { border: 1px solid #ddd; padding: 12px; }
-        th { background: #333; color: white; }
-        .buy { color: green; font-weight: bold; }
-        .sell { color: red; font-weight: bold; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; text-align: center; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; margin-bottom: 30px; border-bottom: 2px solid #3498db; display: inline-block; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 15px; border-bottom: 1px solid #eee; }
+        th { background-color: #34495e; color: white; text-transform: uppercase; font-size: 14px; }
+        tr:hover { background-color: #f9f9f9; }
+        .badge { padding: 8px 15px; border-radius: 20px; color: white; font-weight: bold; font-size: 12px; display: inline-block; min-width: 120px; }
+        .symbol-text { font-weight: bold; color: #2980b9; }
     </style>
 </head>
 <body>
-    <h2>نتائج فلتر WaveTrend للسوق السعودي</h2>
-    <table>
-        <tr>
-            <th>الرمز</th>
-            <th>WT1</th>
-            <th>WT2</th>
-            <th>الإشارة</th>
-        </tr>
-        {% for stock in stocks %}
-        <tr>
-            <td>{{ stock.symbol }}</td>
-            <td>{{ stock.wt1 }}</td>
-            <td>{{ stock.wt2 }}</td>
-            <td class="{{ 'buy' if 'Buy' in stock.signal else 'sell' if 'Sell' in stock.signal else '' }}">
-                {{ stock.signal }}
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
+    <div class="container">
+        <h1>مراقب السوق السعودي (الفاصل الشهري)</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>رمز السهم</th>
+                    <th>WT1 (الأخضر)</th>
+                    <th>WT2 (الأحمر)</th>
+                    <th>حالة المؤشر</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stock in stocks %}
+                <tr>
+                    <td class="symbol-text">{{ stock.symbol }}</td>
+                    <td>{{ stock.wt1 }}</td>
+                    <td>{{ stock.wt2 }}</td>
+                    <td>
+                        <span class="badge" style="background-color: {{ stock.color }};">
+                            {{ stock.signal }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p style="margin-top: 20px; color: #7f8c8d; font-size: 12px;">ملاحظة: الإشارة "قيد التشكل" تعني حدوث التقاطع قبل إغلاق شمعة الشهر.</p>
+    </div>
 </body>
 </html>
