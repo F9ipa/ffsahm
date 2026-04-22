@@ -1,42 +1,39 @@
 import os
-import requests
 from flask import Flask, render_template
+import yfinance as yf
+import pandas as pd
 
 app = Flask(__name__)
 
-def get_tasi_data():
-    # الرابط الأساسي لفتح الجلسة
-    base_url = "https://www.saudiexchange.sa.sa/wps/portal/saudiexchange/ourmarkets/main-market-watch?locale=ar"
-    # رابط البيانات (API)
-    api_url = "https://www.saudiexchange.sa.sa/wps/portal/saudiexchange/ourmarkets/main-market-watch/!ut/p/z1/04_Sj9CPykssy0xPLMnMz0vMAfIjo8zi_TxNDDwN3A183B39DA0cPZ29PN1C_I0MDQz0w8EKDHAARwP9KGL041EQhd_4cP0oVCv8vY3MfE0NAl3dDRzd3czNdYP0Y_Sj8BtREB6aX5CRmZueH6UfVpSZXFpS7K_p55GcnpOfm5pXkllclpOfp5-fV1QCACv9R_E!/p0/IZ7_5PFC1PS0G0HT90A6A3866T30G1=CZ6_5PFC1PS0G0HT90A6A3866T30G4=NJlistCompanies=/"
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
-        "Referer": base_url
-    }
-
+def get_tasi_data_from_yahoo():
+    # قائمة ببعض الرموز كمثال، يمكنك إضافة كل الرموز الـ 269 لاحقاً
+    # أو قراءتها من ملف tasi.txt إذا رفعته مع المشروع
+    sample_symbols = ["2222.SR", "1120.SR", "1180.SR", "2010.SR", "7010.SR"] 
+    
+    # لجلب الـ 269 شركة، يفضل جلبها على دفعات
     try:
-        session = requests.Session()
-        # الخطوة 1: زيارة الصفحة الرئيسية للحصول على الكوكيز
-        session.get(base_url, headers=headers, timeout=15)
+        # جلب البيانات لعدة رموز مرة واحدة لتسريع العملية
+        tickers = yf.Tickers(' '.join(sample_symbols))
+        stocks_list = []
         
-        # الخطوة 2: طلب البيانات باستخدام نفس الجلسة
-        response = session.get(api_url, headers=headers, timeout=15)
-        response.raise_for_status()
-        
-        data = response.json()
-        stocks = data.get('recs', [])
-        print(f"تم جلب {len(stocks)} شركة بنجاح")
-        return stocks
+        for symbol in sample_symbols:
+            info = tickers.tickers[symbol].fast_info
+            # استخراج اسم الشركة (اختياري، ياهو يوفر الاسماء بالانجليزي غالباً)
+            stocks_list.append({
+                'symbol': symbol.replace('.SR', ''),
+                'lNameAr': f"شركة {symbol.replace('.SR', '')}", # يمكنك ربطها بقاموس أسماء عربية
+                'lastTradePrice': round(info['last_price'], 2),
+                'change': round(info['last_price'] - info['previous_close'], 2),
+                'pctChange': round(((info['last_price'] - info['previous_close']) / info['previous_close']) * 100, 2)
+            })
+        return stocks_list
     except Exception as e:
-        print(f"فشل جلب البيانات: {e}")
+        print(f"Yahoo Error: {e}")
         return []
 
 @app.route('/')
 def index():
-    stocks = get_tasi_data()
+    stocks = get_tasi_data_from_yahoo()
     return render_template('index.html', stocks=stocks)
 
 if __name__ == "__main__":
