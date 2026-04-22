@@ -3,31 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TASI Dark Monitor</title>
+    <title>مراقب تاسي الذكي - 269 شركة</title>
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --accent: #38bdf8; --up: #4ade80; --down: #f87171; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; }
-        .header { text-align: center; padding: 20px; background: var(--card); border-radius: 12px; margin-bottom: 15px; border: 1px solid #334155; }
-        .search-box { width: 100%; padding: 15px; background: var(--card); border: 1px solid #334155; border-radius: 10px; color: white; margin-bottom: 15px; box-sizing: border-box; font-size: 16px; outline: none; }
-        .search-box:focus { border-color: var(--accent); }
-        table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; }
-        th { background: #1e293b; padding: 12px; color: #94a3b8; font-size: 13px; border-bottom: 1px solid #334155; }
-        td { padding: 15px 10px; border-bottom: 1px solid #0f172a; text-align: center; }
+        :root { 
+            --bg: #0f172a; --card: #1e293b; --text: #f8fafc; 
+            --accent: #38bdf8; --up: #4ade80; --down: #f87171; 
+        }
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background: var(--bg); color: var(--text); 
+            margin: 0; padding: 10px; 
+        }
+        .header { 
+            text-align: center; padding: 15px; 
+            background: var(--card); border-radius: 12px; 
+            margin-bottom: 10px; border: 1px solid #334155; 
+        }
+        .search-box { 
+            width: 100%; padding: 15px; 
+            background: var(--card); border: 1px solid #334155; 
+            border-radius: 10px; color: white; 
+            margin-bottom: 10px; box-sizing: border-box; 
+            font-size: 16px; outline: none; 
+        }
+        table { 
+            width: 100%; border-collapse: collapse; 
+            background: var(--card); border-radius: 12px; 
+            overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        th { 
+            background: #1e293b; padding: 12px; 
+            color: #94a3b8; font-size: 13px; 
+            border-bottom: 1px solid #334155; 
+        }
+        td { 
+            padding: 14px 10px; border-bottom: 1px solid #0f172a; 
+            text-align: center; font-size: 15px;
+        }
+        .symbol { color: var(--accent); font-weight: bold; }
         .up-val { color: var(--up); font-weight: bold; }
         .down-val { color: var(--down); font-weight: bold; }
-        #loader { text-align: center; padding: 40px; color: var(--accent); font-weight: bold; }
+        #loader { 
+            text-align: center; padding: 50px 20px; 
+            color: var(--accent); font-weight: 500;
+        }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h2 style="margin:0;">مراقب تاسي الذكي</h2>
-    <div id="status" style="font-size: 12px; color: #94a3b8; margin-top: 5px;">جاري الاتصال بالسيرفر...</div>
+    <h3 style="margin:0;">مراقب تاسي (TASI)</h3>
+    <div id="status" style="font-size: 11px; color: #94a3b8; margin-top: 5px;">جاري تشغيل محرك البيانات...</div>
 </div>
 
-<input type="text" id="search" onkeyup="drawTable()" placeholder="ابحث برقم الشركة (مثلاً: 2222)..." class="search-box">
+<input type="text" id="search" onkeyup="drawTable()" placeholder="ابحث برقم الشركة..." class="search-box">
 
-<div id="loader">يتم الآن جلب بيانات 269 شركة...<br><small style="color:#94a3b8">قد يستغرق أول تحميل 20 ثانية</small></div>
+<div id="loader">
+    جاري جلب 269 شركة لأول مرة...<br>
+    <small style="color:#94a3b8; font-weight: normal;">يرجى الانتظار 15 ثانية، الصفحة ستحدث نفسها</small>
+</div>
 
 <table id="mainTable" style="display:none;">
     <thead>
@@ -48,15 +82,20 @@
         const status = document.getElementById('status');
         try {
             const res = await fetch('/api/data');
-            if (!res.ok) throw new Error();
-            stocksData = await res.json();
+            const result = await res.json();
             
-            loader.style.display = 'none';
-            document.getElementById('mainTable').style.display = 'table';
-            status.innerText = `تحديث مباشر لـ ${stocksData.length} شركة`;
-            drawTable();
+            if (result.updated) {
+                stocksData = result.stocks;
+                loader.style.display = 'none';
+                document.getElementById('mainTable').style.display = 'table';
+                status.innerText = `تحديث مباشر لـ ${stocksData.length} شركة`;
+                drawTable();
+            } else {
+                // إذا لم تجهز البيانات بعد، حاول مرة أخرى كل 5 ثوانٍ
+                setTimeout(loadData, 5000);
+            }
         } catch (e) {
-            loader.innerHTML = `خطأ في الاتصال.. <button onclick="location.reload()" style="background:var(--accent); border:none; padding:8px 15px; border-radius:5px; color:white; font-weight:bold;">إعادة محاولة</button>`;
+            setTimeout(loadData, 5000);
         }
     }
 
@@ -69,20 +108,18 @@
 
         filtered.forEach(item => {
             const row = `<tr>
-                <td style="color:var(--accent); font-weight:bold;">${item.s}</td>
-                <td style="font-family:monospace; font-size:16px;">${item.p}</td>
+                <td class="symbol">${item.s}</td>
+                <td style="font-family:monospace;">${item.p.toFixed(2)}</td>
                 <td class="${item.c >= 0 ? 'up-val' : 'down-val'}">
-                    ${item.c > 0 ? '+' : ''}${item.c} (${item.pc}%)
+                    ${item.c > 0 ? '+' : ''}${item.c.toFixed(2)} (${item.pc.toFixed(2)}%)
                 </td>
             </tr>`;
             tbody.innerHTML += row;
         });
     }
 
-    // جلب البيانات عند فتح الصفحة
-    loadData();
-    // تحديث البيانات تلقائياً كل دقيقتين
-    setInterval(loadData, 120000);
+    loadData(); // أول تشغيل
+    setInterval(loadData, 60000); // تحديث صامت كل دقيقة
 </script>
 
 </body>
