@@ -6,7 +6,7 @@ import os
 
 app = Flask(__name__)
 
-# تحويل البيانات إلى هايكن آشي
+# تحويل الشموع إلى Heikin-Ashi
 def get_heikin_ashi(df):
     try:
         ha_df = df.copy()
@@ -21,7 +21,7 @@ def get_heikin_ashi(df):
         return ha_df
     except: return df
 
-# حساب مؤشر WaveTrend
+# حساب WaveTrend
 def calculate_wavetrend(df, n1=10, n2=21):
     ap = (df['High'] + df['Low'] + df['Close']) / 3
     esa = ap.ewm(span=n1, adjust=False).mean()
@@ -32,27 +32,21 @@ def calculate_wavetrend(df, n1=10, n2=21):
     return wt1, wt2
 
 def get_signals():
-    # الرموز الأساسية (تاسي، تبوك الزراعية، الراجحي، أرامكو)
-    symbols = ["^TASI", "6040.SR", "1120.SR", "2222.SR"]
-    
-    # محاولة إضافة رموز من الملف الخارجي
+    # الرموز من ملفك أو الافتراضية
+    symbols = ["^TASI", "6040.SR"] # رموز تجريبية
     if os.path.exists('symbols.txt'):
-        try:
-            with open('symbols.txt', 'r') as f:
-                extra = [l.strip() for l in f.readlines() if l.strip()]
-                if extra: symbols = list(set(symbols + extra))
-        except: pass
+        with open('symbols.txt', 'r') as f:
+            extra = [l.strip() for l in f.readlines() if l.strip()]
+            if extra: symbols = extra
 
     results = []
-    error_log = []
-
     for symbol in symbols:
         try:
-            # جلب بيانات شهرية لمدة سنتين لسرعة الأداء
-            data = yf.download(symbol, period="5y", interval="1mo", progress=False, timeout=15)
+            # التعديل هنا: فاصل أسبوعي interval="1wk"
+            # فترة 5 سنوات كافية جداً للأسبوعي
+            data = yf.download(symbol, period="5y", interval="1wk", progress=False, timeout=15)
             
-            if data is None or data.empty or len(data) < 20:
-                error_log.append(f"بيانات غير كافية للسهم: {symbol}")
+            if data.empty or len(data) < 25:
                 continue
 
             ha_data = get_heikin_ashi(data)
@@ -62,21 +56,28 @@ def get_signals():
             p_wt1, p_wt2 = float(wt1.iloc[-2]), float(wt2.iloc[-2])
 
             signal, color = "انتظار", "#95a5a6"
-            if p_wt1 <= p_wt2 and c_wt1 > c_wt2:
-                signal, color = "إيجابي (قيد التشكل)", "#2ecc71"
-            elif p_wt1 >= p_wt2 and c_wt1 < c_wt2:
-                signal, color = "سلبي (قيد التشكل)", "#e74c3c"
-
-            results.append({'symbol': symbol, 'wt1': round(c_wt1, 2), 'wt2': round(c_wt2, 2), 'signal': signal, 'color': color})
-        except Exception as e:
-            error_log.append(f"خطأ تقني في {symbol}: {str(e)}")
             
-    return results, error_log
+            # تقاطع إيجابي أسبوعي (قيد التشكل أو مؤكد)
+            if p_wt1 <= p_wt2 and c_wt1 > c_wt2:
+                signal, color = "إيجابي أسبوعي", "#2ecc71"
+            elif p_wt1 >= p_wt2 and c_wt1 < c_wt2:
+                signal, color = "سلبي أسبوعي", "#e74c3c"
+
+            results.append({
+                'symbol': symbol, 
+                'wt1': round(c_wt1, 2), 
+                'wt2': round(c_wt2, 2), 
+                'signal': signal, 
+                'color': color
+            })
+        except: continue
+            
+    return results
 
 @app.route('/')
 def index():
-    stocks, errors = get_signals()
-    return render_template('index.html', stocks=stocks, errors=errors)
+    stocks = get_signals()
+    return render_template('index.html', stocks=stocks)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
