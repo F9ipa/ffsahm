@@ -1,51 +1,61 @@
 import streamlit as st
 import requests
 import pandas as pd
+import time
 
-# إعدادات الصفحة
-st.set_page_config(page_title="رادار تاسي الاحترافي", layout="wide")
+st.set_page_config(page_title="رادار تاسي الذكي", layout="wide")
 
-st.markdown("""
-    <style>
-    .main { text-align: right; direction: rtl; }
-    </style>
-    """, unsafe_allow_html=True)
+# تصميم الواجهة لتناسب الجوال (RTL)
+st.markdown("""<style> .main { text-align: right; direction: rtl; } </style>""", unsafe_allow_html=True)
 
-st.title("📈 رادار السوق السعودي الذكي")
-st.write("يتم سحب البيانات الآن مباشرة من TradingView لجميع أسهم السوق")
+st.title("📈 رادار السوق السعودي")
 
-def get_all_tasi_data():
-    # هذا الرابط يجلب كل أسهم السوق السعودي المتاحة في السكرينر
+def fetch_data_with_progress():
     url = "https://scanner.tradingview.com/saudi/scan"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
     
-    # طلب كافة الأسهم مع الفلاتر الفنية
     payload = {
-        "filter": [
-            {"left": "type", "operation": "in_range", "right": ["stock", "dr", "fund"]}
-        ],
-        "options": {"lang": "ar"},
+        "filter": [{"left": "type", "operation": "in_range", "right": ["stock", "dr", "fund"]}],
         "markets": ["saudi"],
-        "symbols": {"query": {"types": []}, "tickers": []},
-        "columns": [
-            "name", 
-            "description", 
-            "close", 
-            "change", 
-            "RSI", 
-            "EMA20", 
-            "EMA50",
-            "volume"
-        ],
-        "sort": {"sortBy": "change", "sortOrder": "desc"},
-        "range": [0, 300] # جلب أول 300 شركة (تغطي كامل السوق)
+        "columns": ["name", "description", "close", "change", "RSI", "EMA20"],
+        "range": [0, 100] # سنجلب 100 شركة كمثال للسرعة
     }
+
+    # إعداد شريط التقدم والوقت
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    start_time = time.time()
+
+    # محاكاة العداد (لأن طلب الـ API يأتي دفعة واحدة، سنقسم العرض ليعطي شعور العداد)
+    for i in range(1, 101):
+        # في المنتصف نقوم بطلب البيانات الفعلي
+        if i == 50:
+            try:
+                response = requests.post(url, json=payload, headers=headers, timeout=10)
+                raw_data = response.json()
+            except:
+                st.error("خطأ في الاتصال بالسيرفر")
+                return None
+
+        # حساب الوقت
+        current_time = time.time()
+        elapsed_time = current_time - start_time
+        # تقدير الوقت المتبقي (بناءً على سرعة العداد)
+        remaining_time = (elapsed_time / i) * (100 - i) if i > 0 else 0
+        
+        # تحديث شريط التقدم
+        progress_bar.progress(i)
+        status_text.text(f"جاري التحميل: {i}% | المستغرق: {elapsed_time:.1f}ث | المتبقي: {remaining_time:.1f}ث")
+        
+        # سرعة العداد (يمكنك تقليلها ليصبح العداد أسرع)
+        time.sleep(0.02)
+
+    return raw_data
+
+if st.button('بدء عملية الفحص الفني 🔍'):
+    data = fetch_data_with_progress()
     
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        data = response.json()
+    if data and 'data' in data:
         rows = []
         for item in data['data']:
             d = item['d']
@@ -53,32 +63,10 @@ def get_all_tasi_data():
                 "الرمز": item['s'].split(':')[1],
                 "الشركة": d[1],
                 "السعر": d[2],
-                "التغيير %": round(d[3], 2),
                 "RSI": round(d[4], 2) if d[4] else 0,
-                "EMA20": round(d[5], 2) if d[5] else 0,
-                "EMA50": round(d[6], 2) if d[6] else 0,
-                "الفوليوم": d[7]
+                "الحالة": "✅ صاعد" if d[2] > d[5] else "⚠️ هابط"
             })
-        return pd.DataFrame(rows)
-    except Exception as e:
-        st.error(f"خطأ في جلب البيانات: {e}")
-        return pd.DataFrame()
-
-# زر التحديث
-if st.sidebar.button('تحديث الرادار 🔄'):
-    df = get_all_tasi_data()
-    
-    if not df.empty:
-        # استراتيجية الفلترة: الأسهم التي فوق متوسط 20 (إيجابية مضاربية)
-        st.subheader("🚀 الأسهم في مسار صاعد (فوق EMA20)")
-        positive_df = df[df['السعر'] > df['EMA20']]
         
-        # عرض الجدول
-        st.dataframe(positive_df, use_container_width=True)
-        
-        # إحصائيات سريعة
-        col1, col2 = st.columns(2)
-        col1.metric("عدد الشركات المحللة", len(df))
-        col2.metric("شركات إيجابية", len(positive_df))
-    else:
-        st.write("انقر على الزر لتحديث البيانات")
+        df = pd.DataFrame(rows)
+        st.success("✅ اكتمل التحليل")
+        st.table(df) # استخدام table بدلاً من dataframe لضمان الثبات في الخلفية
