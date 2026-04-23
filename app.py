@@ -1,102 +1,56 @@
-import os, time, threading
-from flask import Flask, render_template, jsonify
-import yfinance as yf
+import streamlit as st
+import requests
 import pandas as pd
+import os
 
-app = Flask(__name__)
+# إعداد واجهة الصفحة
+st.set_page_config(page_title="رادار الأسهم السعودية", layout="wide")
+st.title("📊 رادار السوق السعودي - TradingView")
 
-# مخزن البيانات المطور
-data_store = {
-    'signals': [], 
-    'last_update': 0, 
-    'is_loading': False,
-    'progress': 0,
-    'total_companies': 0  # عدد الشركات الكلي في الملف
-}
-
-def load_tasi_symbols():
+def get_tv_data(symbols):
+    url = "https://scanner.tradingview.com/saudi/scan"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    payload = {
+        "symbols": {"tickers": [f"TADAWUL:{s}" for s in symbols]},
+        "columns": ["name", "close", "change", "RSI", "EMA20", "EMA50"]
+    }
+    
     try:
-        path = os.path.join(os.path.dirname(__file__), 'tasi.txt')
-        if not os.path.exists(path):
-            return ["2222.SR"] 
-        with open(path, 'r') as f:
-            lines = [f"{line.strip()}.SR" for line in f if line.strip()]
-            data_store['total_companies'] = len(lines) # حفظ العدد الكلي
-            return lines
-    except: 
-        return ["2222.SR"]
+        response = requests.post(url, json=payload, headers=headers)
+        data = response.json()
+        rows = []
+        for item in data['data']:
+            rows.append({
+                "الرمز": item['s'].split(':')[1],
+                "السعر": item['d'][1],
+                "التغيير %": round(item['d'][2], 2),
+                "RSI": round(item['d'][3], 2) if item['d'][3] else 0,
+                "EMA20": item['d'][4],
+                "EMA50": item['d'][5]
+            })
+        return pd.DataFrame(rows)
+    except:
+        return pd.DataFrame()
 
-def background_scan():
-    global data_store
-    while True:
-        try:
-            data_store['is_loading'] = True
-            symbols = load_tasi_symbols()
-            all_opportunities = []
-            
-            chunk_size = 40
-            for i in range(0, len(symbols), chunk_size):
-                chunk = symbols[i:i + chunk_size]
-                
-                # تحميل البيانات بنظام المجموعات
-                df = yf.download(' '.join(chunk), period="100d", interval="1d", group_by='ticker', threads=True, progress=False)
-                
-                for sym in chunk:
-                    try:
-                        if isinstance(df.columns, pd.MultiIndex):
-                            if sym not in df.columns.levels[0] or df[sym].empty: continue
-                            s_data = df[sym].dropna()
-                        else:
-                            s_data = df.dropna()
-
-                        if len(s_data) < 50: continue
-
-                        close_prices = s_data['Close']
-                        sma20 = close_prices.rolling(window=20).mean()
-                        sma50 = close_prices.rolling(window=50).mean()
-                        
-                        last_p = float(close_prices.iloc[-1])
-                        curr_20 = float(sma20.iloc[-1])
-                        curr_50 = float(sma50.iloc[-1])
-                        
-                        # استراتيجية التقاطعات
-                        if curr_20 > curr_50 and last_p > curr_20:
-                            prev_close = float(close_prices.iloc[-2])
-                            pc = ((last_p - prev_close) / prev_close) * 100
-                            
-                            all_opportunities.append({
-                                's': sym.replace('.SR', ''),
-                                'p': round(last_p, 2),
-                                'pc': round(pc, 2)
-                            })
-                    except: continue
-                
-                # تحديث تدريجي للنتائج
-                data_store['signals'] = sorted(all_opportunities, key=lambda x: x['pc'], reverse=True)
-                data_store['last_update'] = time.time()
-                data_store['progress'] = i + len(chunk) # عدد الشركات التي تم فحصها حتى الآن
-
-            data_store['is_loading'] = False
-        except Exception as e:
-            print(f"Error: {e}")
-            data_store['is_loading'] = False
+# قراءة الملف
+if os.path.exists('tasi.txt'):
+    with open('tasi.txt', 'r') as f:
+        my_symbols = [line.strip() for line in f if line.strip().isdigit()]
+    
+    if st.button('تحديث البيانات الآن 🔄'):
+        df = get_tv_data(my_symbols)
         
-        time.sleep(600)
-
-threading.Thread(target=background_scan, daemon=True).start()
-
-@app.route('/api/data')
-def get_signals():
-    return jsonify({
-        'stocks': data_store['signals'], 
-        'count': len(data_store['signals']),
-        'loading': data_store['is_loading'],
-        'progress': data_store['progress'],
-        'total': data_store['total_companies']
-    })
-
-@app.route('/')
-def index(): return render_template('index.html')
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+        if not df.empty:
+            # إضافة منطق الفلترة (مثال: الأسهم الإيجابية فقط)
+            df['الحالة'] = df.apply(lambda x: "✅ إيجابي" if x['السعر'] > x['EMA20'] else "⚠️ سلبي", axis=1)
+            
+            # عرض البيانات في جدول تفاعلي
+            st.dataframe(df.style.highlight_max(axis=0, subset=['RSI']), use_container_width=True)
+            
+            st.success(f"تم تحديث {len(df)} سهم بنجاح.")
+        else:
+            st.error("فشل في جلب البيانات من TradingView.")
+else:
+    st.warning("ملف tasi.txt غير موجود في المستودع!")
